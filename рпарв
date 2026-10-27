@@ -1,0 +1,351 @@
+php artisan make:migration create_roles_table
+php artisan make:migration create_categories_table
+php artisan make:migration create_texts_table
+
+Откройте database/migrations/ и переименуйте все четыре файла так, чтобы порядок был:
+text
+
+2024_01_01_000001_create_roles_table.php
+2024_01_01_000002_create_categories_table.php
+2024_01_01_000003_create_users_table.php
+2024_01_01_000004_create_texts_table.php
+
+
+
+database/migrations/2024_01_01_000001_create_roles_table.php
+
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('roles', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('roles');
+    }
+};
+
+
+database/migrations/2024_01_01_000002_create_categories_table.php
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('categories', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('categories');
+    }
+};
+
+
+database/migrations/2024_01_01_000003_create_users_table.php
+
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('login')->unique();
+            $table->string('password');
+            $table->foreignId('role_id')
+                  ->constrained('roles')
+                  ->restrictOnDelete();
+            $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->primary();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('sessions', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->foreignId('user_id')->nullable()->index();
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->longText('payload');
+            $table->integer('last_activity')->index();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('sessions');
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('users');
+    }
+};
+
+
+database/migrations/2024_01_01_000004_create_texts_table.php
+
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('texts', function (Blueprint $table) {
+            $table->id();
+            $table->string('heading');
+            $table->longText('text');
+            $table->foreignId('category_id')
+                  ->constrained('categories')
+                  ->restrictOnDelete();
+            $table->foreignId('user_id')
+                  ->constrained('users')
+                  ->cascadeOnDelete();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('texts');
+    }
+};
+
+
+Шаг 4. Запустить миграции
+bash
+
+php artisan migrate:fresh
+
+
+php artisan make:model Role
+php artisan make:model Category
+php artisan make:model Text
+
+
+app/Models/Role.php
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Role extends Model
+{
+    protected $fillable = ['name'];
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
+}
+
+
+app/Models/Category.php
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Category extends Model
+{
+    protected $fillable = ['name'];
+
+    public function texts()
+    {
+        return $this->hasMany(Text::class);
+    }
+}
+
+
+app/Models/User.php
+
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+class User extends Authenticatable
+{
+    use Notifiable;
+
+    protected $fillable = ['name', 'email', 'login', 'password', 'role_id'];
+
+    protected $hidden = ['password', 'remember_token'];
+
+    protected $casts = ['email_verified_at' => 'datetime'];
+
+    public function role()
+    {
+        return $this->belongsTo(Role::class);
+    }
+
+    public function texts()
+    {
+        return $this->hasMany(Text::class);
+    }
+}
+
+
+app/Models/Text.php
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Text extends Model
+{
+    protected $fillable = ['heading', 'text', 'category_id', 'user_id'];
+
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function author()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+}
+
+
+
+
+database/seeders/DatabaseSeeder.php
+
+
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Category;
+use App\Models\Role;
+use App\Models\Text;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $userRole  = Role::create(['name' => 'user']);
+
+        $news = Category::create(['name' => 'Новости']);
+        $tech = Category::create(['name' => 'Технологии']);
+
+        $author = User::create([
+            'name'     => 'Иван Иванов',
+            'email'    => 'ivan@example.com',
+            'login'    => 'ivan',
+            'password' => bcrypt('secret'),
+            'role_id'  => $userRole->id,
+        ]);
+
+        Text::create([
+            'heading'     => 'Первая статья',
+            'text'        => 'Текст первой статьи.',
+            'category_id' => $tech->id,
+            'user_id'     => $author->id,
+        ]);
+    }
+}
+
+
+
+Шаг 7. Запустить всё вместе
+bash
+
+php artisan migrate:fresh --seed
+
+
+
+
+php artisan tinker
+
+
+Внутри:
+php
+
+App\Models\User::first()->texts;
+App\Models\User::first()->role->name;
+App\Models\Text::first()->author->name;
+App\Models\Text::first()->category->name;
+
+Каждая строка должна вернуть объект или значение, не null. Например:
+text
+
+= Illuminate\Database\Eloquent\Collection {#... all: [ App\Models\Text {...} ] }
+= "user"
+= "Иван Иванов"
+= "Технологии"
+
+Выйти: exit.
+
+
+php artisan tinker
+
+
+// 1. restrict на роли
+App\Models\Role::where('name', 'user')->first()->delete();
+// Ожидание: ошибка QueryException (нельзя удалить роль, у которой есть пользователь)
+
+// 2. restrict на категории
+App\Models\Category::where('name', 'Технологии')->first()->delete();
+// Ожидание: ошибка (в категории есть статья)
+
+// 3. cascade на пользователя
+App\Models\User::first()->delete();
+App\Models\Text::count();
+// Ожидание: 0 — статья удалилась вместе с автором
+
